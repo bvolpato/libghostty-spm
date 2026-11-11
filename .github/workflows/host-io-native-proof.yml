@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: bvolpato/libghostty-spm
-          ref: b4e15d2960be4c3d3a826f447dbf20e8cd510d9a
+          ref: 112d8362906e2929f3d5105ccbb68c1bd2188d63
           path: source
           persist-credentials: false
       - name: Check out fork-only validation fixtures
@@ -55,7 +55,7 @@ jobs:
             xcodebuild -showsdks
             swift --version
           } | tee "$RUNNER_TEMP/legacy-toolchain.txt"
-          test "$(git rev-parse HEAD)" = b4e15d2960be4c3d3a826f447dbf20e8cd510d9a
+          test "$(git rev-parse HEAD)" = 112d8362906e2929f3d5105ccbb68c1bd2188d63
       - name: Exercise actual classes against the published legacy binary
         run: |
           set -euo pipefail
@@ -63,12 +63,12 @@ jobs:
           cp ../proof/.github/native-proof/HostIOHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
           cp ../proof/.github/native-proof/HostIOLegacyNilBufferTests.swift Tests/GhosttyKitTest/Session/
           cp ../proof/.github/native-proof/AuditedHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
-          swift test --filter 'HostIOHeaderInteropTests|AuditedHeaderInteropTests' 2>&1 | tee "$RUNNER_TEMP/legacy-interop.log"
+          swift test --filter 'HostIOHeaderInteropTests|AuditedHeaderInteropTests|TerminalClipboardCompletionPayloadTests|TerminalSearchDelegateTests|TerminalOpenURLDelegateTests' 2>&1 | tee "$RUNNER_TEMP/legacy-interop.log"
       - name: Upload legacy runtime evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: audited-header-legacy-b4e15d2
+          name: audited-header-legacy-112d836
           path: |
             ${{ runner.temp }}/legacy-toolchain.txt
             ${{ runner.temp }}/legacy-interop.log
@@ -84,7 +84,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: bvolpato/libghostty-spm
-          ref: e1bfcc72649cc27e880c14cbebcfe637375d92f6
+          ref: 60b77a301bf269f994156360da05364f3c757f87
           path: source
           persist-credentials: false
       - name: Check out fork-only validation fixtures
@@ -112,7 +112,7 @@ jobs:
             xcodebuild -showsdks
             swift --version
           } | tee "$RUNNER_TEMP/current-consumer-toolchain.txt"
-          test "$(git rev-parse HEAD)" = e1bfcc72649cc27e880c14cbebcfe637375d92f6
+          test "$(git rev-parse HEAD)" = 60b77a301bf269f994156360da05364f3c757f87
       - name: Verify the immutable C-build stage succeeded
         env:
           GH_TOKEN: ${{ github.token }}
@@ -162,12 +162,12 @@ jobs:
           cp Package.local.swift Package.swift
           cp ../proof/.github/native-proof/HostIOHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
           cp ../proof/.github/native-proof/AuditedHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
-          swift test --filter 'HostIOHeaderInteropTests|AuditedHeaderInteropTests' 2>&1 | tee "$RUNNER_TEMP/current-interop.log"
+          swift test --filter 'HostIOHeaderInteropTests|AuditedHeaderInteropTests|TerminalClipboardCompletionPayloadTests|TerminalSearchDelegateTests|TerminalOpenURLDelegateTests' 2>&1 | tee "$RUNNER_TEMP/current-interop.log"
       - name: Upload current runtime and immutable C-source evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: audited-header-current-e1bfcc7-native-f1c8bbe
+          name: audited-header-current-60b77a3-native-f1c8bbe
           path: |
             ${{ runner.temp }}/current-consumer-toolchain.txt
             ${{ runner.temp }}/current-interop.log
