@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: bvolpato/libghostty-spm
-          ref: 5ac8373adbac0bd4918b719741ef4da39fcc28b5
+          ref: b4e15d2960be4c3d3a826f447dbf20e8cd510d9a
           path: source
           persist-credentials: false
       - name: Check out fork-only validation fixtures
@@ -55,7 +55,7 @@ jobs:
             xcodebuild -showsdks
             swift --version
           } | tee "$RUNNER_TEMP/legacy-toolchain.txt"
-          test "$(git rev-parse HEAD)" = 5ac8373adbac0bd4918b719741ef4da39fcc28b5
+          test "$(git rev-parse HEAD)" = b4e15d2960be4c3d3a826f447dbf20e8cd510d9a
       - name: Exercise actual classes against the published legacy binary
         run: |
           set -euo pipefail
@@ -68,7 +68,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: audited-header-legacy-5ac8373
+          name: audited-header-legacy-b4e15d2
           path: |
             ${{ runner.temp }}/legacy-toolchain.txt
             ${{ runner.temp }}/legacy-interop.log
@@ -84,7 +84,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: bvolpato/libghostty-spm
-          ref: fd07eb7c87ee97924635ae370f7f35e495a7d220
+          ref: e1bfcc72649cc27e880c14cbebcfe637375d92f6
           path: source
           persist-credentials: false
       - name: Check out fork-only validation fixtures
@@ -112,7 +112,7 @@ jobs:
             xcodebuild -showsdks
             swift --version
           } | tee "$RUNNER_TEMP/current-consumer-toolchain.txt"
-          test "$(git rev-parse HEAD)" = fd07eb7c87ee97924635ae370f7f35e495a7d220
+          test "$(git rev-parse HEAD)" = e1bfcc72649cc27e880c14cbebcfe637375d92f6
       - name: Verify the immutable C-build stage succeeded
         env:
           GH_TOKEN: ${{ github.token }}
@@ -167,7 +167,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: audited-header-current-fd07eb7-native-f1c8bbe
+          name: audited-header-current-e1bfcc7-native-f1c8bbe
           path: |
             ${{ runner.temp }}/current-consumer-toolchain.txt
             ${{ runner.temp }}/current-interop.log
