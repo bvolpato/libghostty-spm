@@ -73,7 +73,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: bvolpato/libghostty-spm
-          ref: 29b702f5cce60d7481f37055039ce0704c6980e8
+          ref: f1c8bbe85d35d55f214a215dd963b30ae244cf9a
           path: source
           persist-credentials: false
       - name: Check out fork-only validation fixtures
@@ -101,7 +101,7 @@ jobs:
             swift --version
             zig version
           } | tee "$RUNNER_TEMP/paired-toolchain.txt"
-          test "$(git rev-parse HEAD)" = 29b702f5cce60d7481f37055039ce0704c6980e8
+          test "$(git rev-parse HEAD)" = f1c8bbe85d35d55f214a215dd963b30ae244cf9a
       - name: Clone the immutable Ghostty source
         run: |
           set -euo pipefail
@@ -143,7 +143,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: host-io-paired-macos-arm64-29b702f
+          name: host-io-paired-macos-arm64-f1c8bbe
           path: |
             ${{ runner.temp }}/paired-toolchain.txt
             ${{ runner.temp }}/paired-native-build.log
