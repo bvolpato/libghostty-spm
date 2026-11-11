@@ -19,7 +19,7 @@ defaults:
 jobs:
   legacy-interop:
     if: github.repository == 'bvolpato/libghostty-spm'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - name: Check out the isolated baseline repair
@@ -38,7 +38,15 @@ jobs:
       - name: Select and record Xcode
         run: |
           set -euo pipefail
-          sudo xcode-select -s /Applications/Xcode.app
+          if [ -d /Applications/Xcode_27.1.app ]; then
+            sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+          elif [ -d /Applications/Xcode_27.1.0.app ]; then
+            sudo xcode-select -s /Applications/Xcode_27.1.0.app/Contents/Developer
+          else
+            echo 'Xcode 27.1 is required for this validation' >&2
+            exit 1
+          fi
+          test "$(xcodebuild -version | head -n 1)" = 'Xcode 27.1'
           {
             git rev-parse HEAD
             xcodebuild -version
@@ -66,7 +74,7 @@ jobs:
 
   paired-native:
     needs: legacy-interop
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - name: Check out immutable notices and baseline repair
@@ -89,7 +97,15 @@ jobs:
       - name: Select Xcode and install the Metal compiler if required
         run: |
           set -euo pipefail
-          sudo xcode-select -s /Applications/Xcode.app
+          if [ -d /Applications/Xcode_27.1.app ]; then
+            sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+          elif [ -d /Applications/Xcode_27.1.0.app ]; then
+            sudo xcode-select -s /Applications/Xcode_27.1.0.app/Contents/Developer
+          else
+            echo 'Xcode 27.1 is required for this validation' >&2
+            exit 1
+          fi
+          test "$(xcodebuild -version | head -n 1)" = 'Xcode 27.1'
           if ! xcrun --sdk macosx metal -v; then
             xcodebuild -downloadComponent MetalToolchain
           fi
