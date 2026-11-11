@@ -1,4 +1,4 @@
-name: Host IO native proof (fork only)
+name: Audited header runtime proof (fork only)
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: host-io-native-proof
@@ -22,11 +23,11 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 45
     steps:
-      - name: Check out the isolated baseline repair
+      - name: Check out immutable nullability compatibility source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: bvolpato/libghostty-spm
-          ref: c55af45af39161f46edc0606c8ebe46ebe645240
+          ref: 5ac8373adbac0bd4918b719741ef4da39fcc28b5
           path: source
           persist-credentials: false
       - name: Check out fork-only validation fixtures
@@ -54,35 +55,36 @@ jobs:
             xcodebuild -showsdks
             swift --version
           } | tee "$RUNNER_TEMP/legacy-toolchain.txt"
-          test "$(git rev-parse HEAD)" = c55af45af39161f46edc0606c8ebe46ebe645240
-      - name: Exercise actual callbacks against the published legacy header
+          test "$(git rev-parse HEAD)" = 5ac8373adbac0bd4918b719741ef4da39fcc28b5
+      - name: Exercise actual classes against the published legacy binary
         run: |
           set -euo pipefail
           ./Script/check-licenses.sh
           cp ../proof/.github/native-proof/HostIOHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
           cp ../proof/.github/native-proof/HostIOLegacyNilBufferTests.swift Tests/GhosttyKitTest/Session/
-          swift test --filter HostIOHeaderInteropTests 2>&1 | tee "$RUNNER_TEMP/legacy-interop.log"
+          cp ../proof/.github/native-proof/AuditedHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
+          swift test --filter 'HostIOHeaderInteropTests|AuditedHeaderInteropTests' 2>&1 | tee "$RUNNER_TEMP/legacy-interop.log"
       - name: Upload legacy runtime evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: host-io-legacy-interop-c55af45
+          name: audited-header-legacy-5ac8373
           path: |
             ${{ runner.temp }}/legacy-toolchain.txt
             ${{ runner.temp }}/legacy-interop.log
           if-no-files-found: error
           retention-days: 7
 
-  paired-native:
+  current-interop:
     needs: legacy-interop
     runs-on: xcode-27
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
-      - name: Check out immutable notices and baseline repair
+      - name: Check out immutable combined consumer source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: bvolpato/libghostty-spm
-          ref: f1c8bbe85d35d55f214a215dd963b30ae244cf9a
+          ref: fd07eb7c87ee97924635ae370f7f35e495a7d220
           path: source
           persist-credentials: false
       - name: Check out fork-only validation fixtures
@@ -91,11 +93,7 @@ jobs:
           ref: ${{ github.sha }}
           path: proof
           persist-credentials: false
-      - name: Set up Zig
-        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
-        with:
-          version: 0.17.0
-      - name: Select Xcode and install the Metal compiler if required
+      - name: Select and record Xcode
         run: |
           set -euo pipefail
           if [ -d /Applications/Xcode_27.1.app ]; then
@@ -108,66 +106,73 @@ jobs:
           fi
           proof_xcode_version=$(xcodebuild -version)
           test "${proof_xcode_version%%$'\n'*}" = 'Xcode 27.1'
-          if ! xcrun --sdk macosx metal -v; then
-            xcodebuild -downloadComponent MetalToolchain
-          fi
-          xcrun --sdk macosx metal -v
           {
             git rev-parse HEAD
             xcodebuild -version
             xcodebuild -showsdks
             swift --version
-            zig version
-          } | tee "$RUNNER_TEMP/paired-toolchain.txt"
-          test "$(git rev-parse HEAD)" = f1c8bbe85d35d55f214a215dd963b30ae244cf9a
-      - name: Clone the immutable Ghostty source
+          } | tee "$RUNNER_TEMP/current-consumer-toolchain.txt"
+          test "$(git rev-parse HEAD)" = fd07eb7c87ee97924635ae370f7f35e495a7d220
+      - name: Verify the immutable C-build stage succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          ghostty_ref=$(tr -d '[:space:]' < Ghostty.ref)
-          [[ "$ghostty_ref" =~ ^[0-9a-f]{40}$ ]]
-          git clone https://github.com/ghostty-org/ghostty References/ghostty-upstream
-          git -C References/ghostty-upstream checkout --detach "$ghostty_ref"
-          test "$(git -C References/ghostty-upstream rev-parse HEAD)" = "$ghostty_ref"
-      - name: Build and verify a representative macOS arm64 archive
+          gh api repos/bvolpato/libghostty-spm/actions/jobs/130635407530 > "$RUNNER_TEMP/native-c-job-proof.json"
+          jq -e '
+            .id==130635407530 and .run_id==43052624696 and
+            .head_sha=="4b8f7904c1556cd540dde10cb8683cad7a8358ec" and
+            .conclusion=="failure" and
+            any(.steps[]; .name=="Build and verify a representative macOS arm64 archive" and .conclusion=="success") and
+            any(.steps[]; .name=="Check current C and Swift nullability imports" and .conclusion=="success")
+          ' "$RUNNER_TEMP/native-c-job-proof.json"
+      - name: Download the exact previously verified native C artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          github-token: ${{ github.token }}
+          repository: bvolpato/libghostty-spm
+          run-id: 43052624696
+          name: host-io-paired-macos-arm64-f1c8bbe
+          path: native-proof
+      - name: Verify original C artifact and notice provenance
         run: |
           set -euo pipefail
-          ./Script/check-licenses.sh
-          ./Script/test-source-notices.sh "$PWD/References/ghostty-upstream"
-          ./Script/build-ghostty.sh "$PWD/References/ghostty-upstream" aarch64-macos "$PWD/build/out" 2>&1 | tee "$RUNNER_TEMP/paired-native-build.log"
-          ./Script/stage-source-notices.sh --check "$PWD/build/out/include/Licenses"
-          ./Script/stage-source-notices.sh --verify-source "$PWD/References/ghostty-upstream" "$PWD/build/out/include/Licenses"
-          test "$(lipo -archs build/out/lib/libghostty.a)" = arm64
-          nm -g -U build/out/lib/libghostty.a > "$RUNNER_TEMP/paired-symbols.txt"
-          if grep 'libintl_' "$RUNNER_TEMP/paired-symbols.txt"; then
+          printf '%s  %s\n' dec658701d5d05c6129cf2aa0e4bc62f160972352d6d0d781a44476ff3579b6a ../native-proof/paired-macos-arm64.tar.gz | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/native-out"
+          tar -xzf ../native-proof/paired-macos-arm64.tar.gz -C "$RUNNER_TEMP/native-out"
+          ./Script/stage-source-notices.sh --check "$RUNNER_TEMP/native-out/include/Licenses"
+          jq -e '
+            any(.components[]; .name=="ghostty" and .revision=="cf5519b22f910ddc7885d2ef62deb94d38d43f22") and
+            any(.components[]; .name=="libghostty-spm" and .revision=="f1c8bbe85d35d55f214a215dd963b30ae244cf9a")
+          ' "$RUNNER_TEMP/native-out/include/Licenses/manifest.json"
+          test "$(lipo -archs "$RUNNER_TEMP/native-out/lib/libghostty.a")" = arm64
+          nm -g -U "$RUNNER_TEMP/native-out/lib/libghostty.a" > "$RUNNER_TEMP/native-symbols.txt"
+          if grep 'libintl_' "$RUNNER_TEMP/native-symbols.txt"; then
             echo 'GNU libintl symbols are forbidden in this static library' >&2
             exit 1
           fi
-          tar -czf "$RUNNER_TEMP/paired-macos-arm64.tar.gz" -C build/out .
-          shasum -a 256 "$RUNNER_TEMP/paired-macos-arm64.tar.gz" > "$RUNNER_TEMP/paired-SHA256SUMS"
-      - name: Check current C and Swift nullability imports
+          cp ../native-proof/paired-toolchain.txt "$RUNNER_TEMP/native-c-toolchain.txt"
+          cp "$RUNNER_TEMP/native-out/include/Licenses/manifest.json" "$RUNNER_TEMP/native-c-notice-manifest.json"
+      - name: Exercise actual classes with the verified current C archive
         run: |
           set -euo pipefail
-          xcrun clang -std=c11 -Wall -Wextra -Werror -Wnullability-completeness -Wnullable-to-nonnull-conversion -fsyntax-only -I build/out/include/libghostty ../proof/.github/native-proof/header-nullability.c
-          xcrun swiftc -typecheck -warnings-as-errors -I build/out/include/libghostty ../proof/.github/native-proof/HeaderImport.swift
-      - name: Exercise actual callbacks with the fresh header
-        run: |
-          set -euo pipefail
+          ./Script/check-licenses.sh
           mkdir -p BinaryTarget
-          xcodebuild -create-xcframework -library "$PWD/build/out/lib/libghostty.a" -headers "$PWD/build/out/include" -output "$PWD/BinaryTarget/GhosttyKit.xcframework"
+          xcodebuild -create-xcframework -library "$RUNNER_TEMP/native-out/lib/libghostty.a" -headers "$RUNNER_TEMP/native-out/include" -output "$PWD/BinaryTarget/GhosttyKit.xcframework"
           cp Package.local.swift Package.swift
           cp ../proof/.github/native-proof/HostIOHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
-          swift test --filter HostIOHeaderInteropTests 2>&1 | tee "$RUNNER_TEMP/current-interop.log"
-      - name: Upload representative native evidence
+          cp ../proof/.github/native-proof/AuditedHeaderInteropTests.swift Tests/GhosttyKitTest/Session/
+          swift test --filter 'HostIOHeaderInteropTests|AuditedHeaderInteropTests' 2>&1 | tee "$RUNNER_TEMP/current-interop.log"
+      - name: Upload current runtime and immutable C-source evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: host-io-paired-macos-arm64-f1c8bbe
+          name: audited-header-current-fd07eb7-native-f1c8bbe
           path: |
-            ${{ runner.temp }}/paired-toolchain.txt
-            ${{ runner.temp }}/paired-native-build.log
+            ${{ runner.temp }}/current-consumer-toolchain.txt
             ${{ runner.temp }}/current-interop.log
-            ${{ runner.temp }}/paired-macos-arm64.tar.gz
-            ${{ runner.temp }}/paired-SHA256SUMS
+            ${{ runner.temp }}/native-c-job-proof.json
+            ${{ runner.temp }}/native-c-toolchain.txt
+            ${{ runner.temp }}/native-c-notice-manifest.json
           if-no-files-found: error
-          compression-level: 0
           retention-days: 7
