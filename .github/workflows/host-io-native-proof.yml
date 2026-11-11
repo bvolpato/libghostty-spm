@@ -46,7 +46,8 @@ jobs:
             echo 'Xcode 27.1 is required for this validation' >&2
             exit 1
           fi
-          test "$(xcodebuild -version | head -n 1)" = 'Xcode 27.1'
+          proof_xcode_version=$(xcodebuild -version)
+          test "${proof_xcode_version%%$'\n'*}" = 'Xcode 27.1'
           {
             git rev-parse HEAD
             xcodebuild -version
@@ -105,7 +106,8 @@ jobs:
             echo 'Xcode 27.1 is required for this validation' >&2
             exit 1
           fi
-          test "$(xcodebuild -version | head -n 1)" = 'Xcode 27.1'
+          proof_xcode_version=$(xcodebuild -version)
+          test "${proof_xcode_version%%$'\n'*}" = 'Xcode 27.1'
           if ! xcrun --sdk macosx metal -v; then
             xcodebuild -downloadComponent MetalToolchain
           fi
@@ -130,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           ./Script/check-licenses.sh
-          ./Script/test-source-notices.sh
+          ./Script/test-source-notices.sh "$PWD/References/ghostty-upstream"
           ./Script/build-ghostty.sh "$PWD/References/ghostty-upstream" aarch64-macos "$PWD/build/out" 2>&1 | tee "$RUNNER_TEMP/paired-native-build.log"
           ./Script/stage-source-notices.sh --check "$PWD/build/out/include/Licenses"
           ./Script/stage-source-notices.sh --verify-source "$PWD/References/ghostty-upstream" "$PWD/build/out/include/Licenses"
