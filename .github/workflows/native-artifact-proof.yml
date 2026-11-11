@@ -1,0 +1,183 @@
+name: Native artifact proof (fork only)
+
+on:
+  push:
+    branches: [bvolpato/native-artifact-proof-20261111]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-artifact-proof
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-target:
+    if: github.repository == 'bvolpato/libghostty-spm'
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-macos
+            variant: macosx
+          - target: x86_64-macos
+            variant: macosx
+          - target: aarch64-ios
+            variant: iphoneos
+          - target: aarch64-ios-simulator
+            variant: iphonesimulator
+            cpu: apple_a17
+          - target: x86_64-ios-simulator
+            variant: iphonesimulator
+          - target: aarch64-maccatalyst
+            variant: maccatalyst
+            cpu: apple_a17
+          - target: x86_64-maccatalyst
+            variant: maccatalyst
+          - target: aarch64-visionos
+            variant: xros
+          - target: aarch64-visionos-simulator
+            variant: xrsimulator
+            cpu: apple_a17
+          - target: x86_64-visionos-simulator
+            variant: xrsimulator
+    steps:
+      - name: Check out immutable PR source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: bvolpato/libghostty-spm
+          ref: 3afbd2433b9e982d4215cda4dd01dcf7718b74c4
+          persist-credentials: false
+      - name: Set up Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.17.0
+      - name: Check toolchains and clone immutable Ghostty source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 3afbd2433b9e982d4215cda4dd01dcf7718b74c4
+          xcodebuild -version
+          xcodebuild -showsdks
+          zig version
+          ghostty_ref=$(tr -d '[:space:]' < Ghostty.ref)
+          [[ "$ghostty_ref" =~ ^[0-9a-f]{40}$ ]]
+          git clone https://github.com/ghostty-org/ghostty ./References/ghostty-upstream
+          git -C ./References/ghostty-upstream checkout --detach "$ghostty_ref"
+          test "$(git -C ./References/ghostty-upstream rev-parse HEAD)" = "$ghostty_ref"
+      - name: Build target and reject GNU libintl
+        env:
+          ZIG_CPU: ${{ matrix.cpu }}
+          BUILD_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          ./Script/check-licenses.sh
+          ./Script/build-ghostty.sh "$PWD/References/ghostty-upstream" "$BUILD_TARGET" "$PWD/build/out"
+          nm -g -U build/out/lib/libghostty.a > "$RUNNER_TEMP/symbols.txt"
+          if grep 'libintl_' "$RUNNER_TEMP/symbols.txt"; then
+            echo 'GNU libintl symbols are forbidden in this static library' >&2
+            exit 1
+          fi
+          ./Script/stage-source-notices.sh --check "$PWD/build/out/include/Licenses"
+          {
+            git rev-parse HEAD
+            git -C References/ghostty-upstream rev-parse HEAD
+            xcodebuild -version
+            zig version
+            lipo -archs build/out/lib/libghostty.a
+          } > build/out/build-context.txt
+      - name: Pack target artifact
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          BUILD_VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          tar -czf "$RUNNER_TEMP/target--$BUILD_VARIANT--$BUILD_TARGET.tar.gz" -C build/out .
+      - name: Upload target artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: target--${{ matrix.variant }}--${{ matrix.target }}
+          path: ${{ runner.temp }}/target--${{ matrix.variant }}--${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  merge-and-consume:
+    needs: build-target
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Check out immutable PR source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: bvolpato/libghostty-spm
+          ref: 3afbd2433b9e982d4215cda4dd01dcf7718b74c4
+          persist-credentials: false
+      - name: Select Xcode and record toolchain
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+          xcodebuild -showsdks
+      - name: Download built targets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: target--*
+          path: build/tarballs
+          merge-multiple: true
+      - name: Assemble verified variants
+        run: |
+          set -euo pipefail
+          mkdir -p build/targets build/dest
+          tarballs=(build/tarballs/target--*.tar.gz)
+          test "${#tarballs[@]}" = 10
+          for tarball in "${tarballs[@]}"; do
+            name=$(basename "$tarball" .tar.gz)
+            variant=$(echo "$name" | awk -F'--' '{print $2}')
+            target=$(echo "$name" | awk -F'--' '{print $3}')
+            mkdir -p "build/targets/$variant/$target"
+            tar -xzf "$tarball" -C "build/targets/$variant/$target"
+          done
+          for variant_dir in build/targets/*/; do
+            variant=$(basename "$variant_dir")
+            mkdir -p "build/dest/$variant/lib" "build/dest/$variant/include"
+            libs=()
+            first_headers=
+            for target_dir in "$variant_dir"*/; do
+              libs+=("$target_dir/lib/libghostty.a")
+              if [ -z "$first_headers" ]; then
+                first_headers="$target_dir/include"
+              else
+                ./Script/stage-source-notices.sh --compare "$first_headers/Licenses" "$target_dir/include/Licenses"
+              fi
+            done
+            cp -R "$first_headers/." "build/dest/$variant/include/"
+            if [ "${#libs[@]}" -eq 1 ]; then
+              cp "${libs[0]}" "build/dest/$variant/lib/libghostty.a"
+            else
+              lipo -create "${libs[@]}" -output "build/dest/$variant/lib/libghostty.a"
+            fi
+          done
+      - name: Merge, verify notices and link all consumer destinations
+        run: |
+          set -euo pipefail
+          ./Script/merge-xcframework.sh "$PWD/build/dest" "$PWD/BinaryTarget/GhosttyKit.xcframework" "$PWD/build/GhosttyKit.xcframework.zip"
+          ./Script/test-xcframework-consumer.sh "$PWD/BinaryTarget/GhosttyKit.xcframework"
+          shasum -a 256 build/GhosttyKit.xcframework.zip > build/SHA256SUMS
+      - name: Upload verified XCFramework
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-GhosttyKit-3afbd2433b9e
+          path: |
+            build/GhosttyKit.xcframework.zip
+            build/SHA256SUMS
+            build/targets/**/build-context.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
